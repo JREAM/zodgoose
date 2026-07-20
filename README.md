@@ -15,10 +15,10 @@ Originally created by [Andrew Kazakov](https://github.com/andreww2012) ([mongoos
 ## Install
 
 ```sh
-npm install @jream/zongoose
-pnpm add @jream/zongoose
-yarn add @jream/zongoose
-bun add @jream/zongoose
+npm install @jream/zodgoose
+pnpm add @jream/zodgoose
+yarn add @jream/zodgoose
+bun add @jream/zodgoose
 ```
 
 **Peer dependencies:** `mongoose@>=7.0.0`, `zod@>=4.0.0`
@@ -28,7 +28,7 @@ bun add @jream/zongoose
 ```ts
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { toMongooseSchema } from '@jream/zongoose';
+import { toMongooseSchema } from '@jream/zodgoose';
 
 // Define schema with Zod
 const userSchema = z.object({
@@ -69,7 +69,7 @@ const schema = z.object({
 ## Special Types
 
 ```ts
-import { mongooseZodCustomType, genTimestampsSchema } from '@jream/zongoose';
+import { mongooseZodCustomType, genTimestampsSchema } from '@jream/zodgoose';
 
 // Buffer, ObjectId, Decimal128, etc.
 z.object({

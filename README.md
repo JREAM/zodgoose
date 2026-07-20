@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/JREAM/zongoose/main/assets/zodgoose.webp?raw=true" alt="zodgoose" width="700">
+  <img src="https://raw.githubusercontent.com/JREAM/zodgoose/refs/heads/main/assets/zodgoose.webp" alt="zodgoose" width="700">
 </div>
 
 ---

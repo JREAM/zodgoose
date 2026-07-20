@@ -22,8 +22,8 @@ describe("Type options provided by mongoose-zod", () => {
     });
   });
 
-  describe("mzValidate", () => {
-    it("Calls validators if a validation function passed to `mzValidate`", () => {
+  describe("zgValidate", () => {
+    it("Calls validators if a validation function passed to `zgValidate`", () => {
       let validateCalled = false;
       const validate = () => {
         validateCalled = true;
@@ -32,7 +32,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate: validate,
+            zgValidate: validate,
           },
         },
       });
@@ -43,7 +43,7 @@ describe("Type options provided by mongoose-zod", () => {
       expect(validateCalled).toBe(true);
     });
 
-    it("Calls validators if a validation function passed to `mzValidate` on a sub schema", () => {
+    it("Calls validators if a validation function passed to `zgValidate` on a sub schema", () => {
       let validateCalled = false;
       const validate = () => {
         validateCalled = true;
@@ -54,7 +54,7 @@ describe("Type options provided by mongoose-zod", () => {
           user: z.object({ username: z.string() }).mongoose({
             typeOptions: {
               username: {
-                mzValidate: validate,
+                zgValidate: validate,
               },
             },
           }),
@@ -67,7 +67,7 @@ describe("Type options provided by mongoose-zod", () => {
       expect(validateCalled).toBe(true);
     });
 
-    it("Calls validators if an object with a validation function passed to `mzValidate`", () => {
+    it("Calls validators if an object with a validation function passed to `zgValidate`", () => {
       let validateCalled = false;
       const validate = () => {
         validateCalled = true;
@@ -75,7 +75,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate: {
+            zgValidate: {
               message: "any",
               validator: validate,
             },
@@ -94,7 +94,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate() {
+            zgValidate() {
               that = this;
               return true;
             },
@@ -114,7 +114,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate: {
+            zgValidate: {
               validator() {
                 that = this;
                 return true;
@@ -136,7 +136,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate() {
+            zgValidate() {
               that = this;
               return true;
             },
@@ -163,7 +163,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string().optional() }).mongoose({
         typeOptions: {
           username: {
-            mzValidate: {
+            zgValidate: {
               validator() {
                 that = this;
                 return true;
@@ -187,7 +187,7 @@ describe("Type options provided by mongoose-zod", () => {
       expect(that).toEqual(undefined);
     });
 
-    it("`mzValidate` validation works", () => {
+    it("`zgValidate` validation works", () => {
       const zodSchema = z
         .object({
           email: z.string().email().optional(),
@@ -196,7 +196,7 @@ describe("Type options provided by mongoose-zod", () => {
         .mongoose({
           typeOptions: {
             email: {
-              mzValidate(value) {
+              zgValidate(value) {
                 return !this || (Boolean(this.registered) && value.endsWith("gmail.com"));
               },
             },
@@ -218,8 +218,8 @@ describe("Type options provided by mongoose-zod", () => {
     });
   });
 
-  describe("mzRequired", () => {
-    it("Calls a function passed to `mzRequired`", () => {
+  describe("zgRequired", () => {
+    it("Calls a function passed to `zgRequired`", () => {
       let requiredCalled = false;
       const required = () => {
         requiredCalled = true;
@@ -228,7 +228,7 @@ describe("Type options provided by mongoose-zod", () => {
       const zodSchema = z.object({ username: z.string().optional() }).mongoose({
         typeOptions: {
           username: {
-            mzRequired: required,
+            zgRequired: required,
           },
         },
       });
@@ -239,12 +239,12 @@ describe("Type options provided by mongoose-zod", () => {
       expect(requiredCalled).toBe(true);
     });
 
-    it("`mzRequired` has access to `this` in normal conditions", () => {
+    it("`zgRequired` has access to `this` in normal conditions", () => {
       let that: any;
       const zodSchema = z.object({ username: z.string().optional() }).mongoose({
         typeOptions: {
           username: {
-            mzRequired() {
+            zgRequired() {
               that = this;
               return true;
             },
@@ -259,12 +259,12 @@ describe("Type options provided by mongoose-zod", () => {
       expect(that).toEqual(doc);
     });
 
-    it("`mzRequired` has `this` set to undefined when validating in update operation", async () => {
+    it("`zgRequired` has `this` set to undefined when validating in update operation", async () => {
       let that: any = null;
       const zodSchema = z.object({ username: z.string().optional() }).mongoose({
         typeOptions: {
           username: {
-            mzRequired() {
+            zgRequired() {
               that = this;
               return true;
             },
@@ -286,7 +286,7 @@ describe("Type options provided by mongoose-zod", () => {
       expect(that).toEqual(undefined);
     });
 
-    it("`mzRequired` validator works", () => {
+    it("`zgRequired` validator works", () => {
       const zodSchema = z
         .object({
           username: z.string(),
@@ -296,7 +296,7 @@ describe("Type options provided by mongoose-zod", () => {
         .mongoose({
           typeOptions: {
             lastName: {
-              mzRequired() {
+              zgRequired() {
                 return this ? Boolean(this.firstName) : false;
               },
             },

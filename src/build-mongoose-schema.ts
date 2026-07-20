@@ -126,12 +126,13 @@ const addMongooseSchemaFields = (
   const isFieldArray = "array" in schemaFeatures;
 
   const mzOptions = [
-    ["validate", monTypeOptions["mzValidate"]],
-    ["required", monTypeOptions["mzRequired"]],
+    ["validate", monTypeOptions["zgValidate"]],
+    ["required", monTypeOptions["zgRequired"]],
   ] as const;
   mzOptions.forEach(([origName]) => {
+    const zgName = `zg${origName[0]?.toUpperCase()}${origName.slice(1)}`;
     const mzName = `mz${origName[0]?.toUpperCase()}${origName.slice(1)}`;
-    const zgName = `zodgoose${origName[0]?.toUpperCase()}${origName.slice(1)}`;
+    const zodgooseName = `zodgoose${origName[0]?.toUpperCase()}${origName.slice(1)}`;
     if (zgName in monTypeOptions) {
       if (origName in monTypeOptions) {
         throwError(`Can't have both "${zgName}" and "${origName}" set`);
@@ -146,6 +147,13 @@ const addMongooseSchemaFields = (
       monTypeOptions[origName] = monTypeOptions[mzName];
       delete monTypeOptions[mzName];
     }
+    if (zodgooseName in monTypeOptions) {
+      if (origName in monTypeOptions) {
+        throwError(`Can't have both "${zodgooseName}" and "${origName}" set`);
+      }
+      monTypeOptions[origName] = monTypeOptions[zodgooseName];
+      delete monTypeOptions[zodgooseName];
+    }
   });
 
   const commonFieldOptions: SchemaTypeOptions<any> = {
@@ -159,10 +167,10 @@ const addMongooseSchemaFields = (
     ...monTypeOptions,
   };
 
-  const [[, mzValidate], [, mzRequired]] = mzOptions;
+  const [[, zgValidate], [, zgRequired]] = mzOptions;
 
-  if (mzValidate != null) {
-    let mzv = mzValidate;
+  if (zgValidate != null) {
+    let mzv = zgValidate;
     if (typeof mzv === "function") {
       mzv = getFixedOptionFn(mzv);
     } else if (!Array.isArray(mzv) && typeof mzv === "object" && !(mzv instanceof RegExp)) {
@@ -170,13 +178,13 @@ const addMongooseSchemaFields = (
     } else if (Array.isArray(mzv) && !(mzv[0] instanceof RegExp && typeof mzv[1] === "string")) {
       const [firstElem, secondElem] = mzv;
       if (typeof firstElem === "function" && typeof secondElem === "string") {
-        commonFieldOptions["mzValidate"] = [getFixedOptionFn(firstElem), secondElem];
+        commonFieldOptions["zgValidate"] = [getFixedOptionFn(firstElem), secondElem];
       }
     }
     commonFieldOptions.validate = mzv;
   }
-  if (mzRequired != null) {
-    let mzr = mzRequired;
+  if (zgRequired != null) {
+    let mzr = zgRequired;
     if (typeof mzr === "function") {
       mzr = getFixedOptionFn(mzr);
     } else if (Array.isArray(mzr) && typeof mzr[0] === "function") {

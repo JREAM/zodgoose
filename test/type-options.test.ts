@@ -425,11 +425,11 @@ describe("Type options", () => {
     expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
   });
 
-  it("Throws if both mzValidate and validate are set", () => {
+  it("Throws if both zgValidate and validate are set", () => {
     const zodSchema = z
       .object({
         username: z.string().mongooseTypeOptions({
-          mzValidate: (v: string) => v.length > 3,
+          zgValidate: (v: string) => v.length > 3,
           validate: (v: string) => v.length > 3,
         } as any),
       })
@@ -438,11 +438,11 @@ describe("Type options", () => {
     expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
   });
 
-  it("Throws if both mzRequired and required are set", () => {
+  it("Throws if both zgRequired and required are set", () => {
     const zodSchema = z
       .object({
         username: z.string().mongooseTypeOptions({
-          mzRequired: true,
+          zgRequired: true,
           required: true,
         } as any),
       })

@@ -1,0 +1,6 @@
+{
+  "default": "warn",
+  "rules": {
+    "no-unused-vars": "off"
+  }
+}

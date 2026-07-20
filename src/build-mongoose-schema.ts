@@ -409,6 +409,11 @@ const addMongooseSchemaFields = (
     mongooseFieldDef = MongooseMixed;
   } else if (isZodType(zodSchemaFinal, "ZodSymbol")) {
     mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodXor")) {
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodFile")) {
+    // Files cannot be stored directly in MongoDB; map to Mixed
+    mongooseFieldDef = MongooseMixed;
   } else if (
     isZodType(zodSchemaFinal, "ZodUnknown") ||
     isZodType(zodSchemaFinal, "ZodRecord") ||

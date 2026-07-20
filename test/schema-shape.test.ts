@@ -224,6 +224,8 @@ describe("Schema shape replication", () => {
       ]),
       z.set(z.string()),
       z.symbol(),
+      z.xor(z.string(), z.number()),
+      z.file(),
     ];
 
     typesProducingMixedType.forEach((zodSchema) => {

@@ -41,9 +41,9 @@ const addressSchema = z.object({
 // Define the user schema with nested fields, timestamps, and custom types
 const userSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
-  uid: z.string().uuid(),
+  uid: z.uuid(),
   age: z.number().int().positive().optional(),
   bio: z.string().max(500).optional(),
   role: z.enum(['admin', 'user', 'moderator']).default('user'),
@@ -82,7 +82,7 @@ Use `.mongoose()` for Mongoose-specific options like `schemaOptions` (collection
 
 ```ts
 const schema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   name: z.string().min(1),
 }).mongoose({
   schemaOptions: {
@@ -145,7 +145,7 @@ const Schema = toMongooseSchema(base);
 
 ```ts
 const userZodSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   name: z.string(),
 }).mongoose();
 

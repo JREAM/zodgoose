@@ -1,6 +1,16 @@
-# Zongoose
+<div align="center">
+  <img src="https://raw.githubusercontent.com/JREAM/zongoose/main/zongoose-logo.webp?raw=true" alt="zongoose" width="700">
+</div>
 
-Define Mongoose schemas with Zod. Full type safety, runtime validation, zero boilerplate.
+---
+
+**Zongoose** — Create Mongoose Schemas with Zod
+- [Mongoose](https://github.com/Automattic/mongoose) 7.x+
+- [Zod](https://github.com/colinhacks/zod) 4.x+
+
+Originally created by [Andrew Kazakov](https://github.com/andreww2012) ([mongoose-zod](https://github.com/andreww2012/mongoose-zod)). Maintained by [Jesse Boyer](https://jream.com).
+
+---
 
 ## Install
 
@@ -186,4 +196,11 @@ z.string().mongooseTypeOptions({
 
 ## License
 
-MIT
+MIT License - see [LICENSE.md](./LICENSE.md)
+
+---
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://static.jream.com/logo.svg">
+  <img alt="JREAM" src="https://static.jream.com/logo-black.svg" height="40" align="center">
+</picture>

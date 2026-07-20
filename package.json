@@ -9,6 +9,14 @@
   ],
   "license": "MIT",
   "author": "Jesse Boyer <hello@jream.com> (https://jream.com)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JREAM/zodgoose"
+  },
+  "homepage": "https://github.com/JREAM/zodgoose",
+  "bugs": {
+    "url": "https://github.com/JREAM/zodgoose/issues"
+  },
   "files": [
     "dist"
   ],

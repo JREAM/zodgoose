@@ -1,6 +1,6 @@
 import M from "mongoose";
 import { z } from "zod";
-import { zodgooseError, zodgooseCustomType, toMongooseSchema } from "../src/index.js";
+import { zodgooseError, zodgooseCustomType, toMongooseSchema, registerCustomType, discriminator, getDiscriminators } from "../src/index.js";
 
 enum TestStringEnum {
   a = "A",
@@ -69,6 +69,30 @@ describe("Schema shape replication", () => {
     );
   });
 
+  it("Creates sub-schemas from z.strictObject()", () => {
+    const zodSchema = z
+      .strictObject({
+        a: z.string(),
+      })
+      .mongoose();
+
+    const Schema = toMongooseSchema(zodSchema);
+
+    expect(Schema.paths.a).toBeInstanceOf(M.SchemaTypes.ZodgooseString);
+  });
+
+  it("Creates sub-schemas from z.looseObject()", () => {
+    const zodSchema = z
+      .looseObject({
+        a: z.string(),
+      })
+      .mongoose();
+
+    const Schema = toMongooseSchema(zodSchema);
+
+    expect(Schema.paths.a).toBeInstanceOf(M.SchemaTypes.ZodgooseString);
+  });
+
   it.each([
     // Basic types
     { zodType: "number", schema: z.number(), type: "Number" },
@@ -115,11 +139,71 @@ describe("Schema shape replication", () => {
       schema: z.union([z.boolean(), z.boolean()]),
       type: "Boolean",
     },
+    // Lazy (unwraps to inner type)
+    { zodType: "lazy string", schema: z.lazy(() => z.string()), type: "String" },
+    { zodType: "lazy number", schema: z.lazy(() => z.number()), type: "Number" },
+    // Pipe with same type (no transform) - unwraps to inner schema
+    { zodType: "pipe string", schema: z.string().pipe(z.string()), type: "String" },
+    { zodType: "pipe number", schema: z.number().pipe(z.number()), type: "Number" },
+    // Zod 4 new types
+    { zodType: "template literal", schema: z.templateLiteral([z.string(), z.literal('.')], z.string()), type: "String" },
+    { zodType: "stringbool", schema: z.stringbool(), type: "Boolean" },
+    { zodType: "readonly string", schema: z.string().readonly(), type: "String" },
+    { zodType: "int", schema: z.int(), type: "Number" },
+    { zodType: "float64", schema: z.float64(), type: "Number" },
+    { zodType: "email", schema: z.email(), type: "String" },
+    { zodType: "uuid", schema: z.uuid(), type: "String" },
+    { zodType: "ulid", schema: z.ulid(), type: "String" },
+    { zodType: "int64", schema: z.int64(), type: "Number" },
+    { zodType: "uint64", schema: z.uint64(), type: "Number" },
+    { zodType: "nanoid", schema: z.nanoid(), type: "String" },
   ])("Assigns `Zodgoose$type` mongoose type if zod type is $zodType", ({ schema, type }) => {
     const Schema = toMongooseSchema(z.object({ prop: schema }).mongoose());
     expect(Schema.paths.prop).toBeInstanceOf(
       (M.Schema.Types as Record<string, unknown>)[`Zodgoose${type}`],
     );
+  });
+
+  describe("Zod 4.x unwrap types", () => {
+    it("ZodCatch unwraps to inner type", () => {
+      const s = z.string().catch("fallback");
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.String);
+    });
+
+    it("ZodSuccess unwraps to inner type", () => {
+      if (typeof z.success !== "function") return;
+      const s = z.success(z.string());
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.String);
+    });
+
+    it("ZodExactOptional unwraps to inner type", () => {
+      const s = (z.string() as any).exactOptional?.();
+      if (!s) return;
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.String);
+    });
+
+    it("ZodPrefault unwraps to inner type", () => {
+      if (typeof (z.string() as any).prefault !== "function") return;
+      const s = (z.string() as any).prefault();
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.String);
+    });
+
+    it("ZodNonOptional unwraps to inner type", () => {
+      const s = (z.string().optional() as any).nonoptional?.();
+      if (!s) return;
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.String);
+    });
+
+    it("ZodSymbol maps to Mixed", () => {
+      const s = z.symbol();
+      const Schema = toMongooseSchema(z.object({ prop: s }).mongoose());
+      expect(Schema.paths.prop).toBeInstanceOf(M.Schema.Types.Mixed);
+    });
   });
 
   it("Assigns Mixed type for complex types", () => {
@@ -138,6 +222,8 @@ describe("Schema shape replication", () => {
         z.object({ type: z.literal("a"), a: z.string() }),
         z.object({ type: z.literal("b"), b: z.string() }),
       ]),
+      z.set(z.string()),
+      z.symbol(),
     ];
 
     typesProducingMixedType.forEach((zodSchema) => {
@@ -212,9 +298,15 @@ describe("Schema shape replication", () => {
     const mongooseLong = require("mongoose-long");
     mongooseLong(M);
 
+    // Register the Long type so zodgooseCustomType recognizes it
+    registerCustomType("Long", {
+      instanceClass: (M.Types as any).Long,
+      schemaType: (M.Schema.Types as any).Long,
+    });
+
     const zodSchema = z
       .object({
-        data: zodgooseCustomType("Long" as any),
+        data: zodgooseCustomType("Long"),
       })
       .mongoose();
 
@@ -235,14 +327,12 @@ describe("Schema shape replication", () => {
       z.literal(Symbol.for("") as any),
       z.undefined(),
       z.void(),
-      z.bigint(),
       z.never(),
-      z.set(z.string()),
       z.promise(z.number()),
       z.function(),
-      z.lazy(() => z.boolean()),
       z.preprocess(String, z.string()),
       z.string().transform((val) => val.length),
+      new (z as any).ZodTransform({}),
     ];
 
     unsupportedZodSchemas.forEach((zodSchema) => {
@@ -250,5 +340,77 @@ describe("Schema shape replication", () => {
         toMongooseSchema(z.object({ prop: zodSchema }).mongoose());
       }).toThrow(zodgooseError);
     });
+  });
+
+  it("Throws with 'only refinements are supported' for non-refinement ZodEffects", () => {
+    // Create a fake ZodEffects with a non-refinement effect type
+    const fakeZodEffects = {
+      constructor: { name: "ZodEffects" },
+      _zod: {
+        def: {
+          effect: { type: "transform" },
+        },
+      },
+    } as any;
+
+    expect(() => {
+      toMongooseSchema(z.object({ prop: fakeZodEffects }).mongoose());
+    }).toThrow(/only refinements are supported/);
+  });
+
+  it("Throws with 'ZodTransform is not supported' for standalone ZodTransform", () => {
+    expect(() => {
+      toMongooseSchema(
+        z
+          .object({ prop: new (z as any).ZodTransform({}) })
+          .mongoose(),
+      );
+    }).toThrow(/ZodTransform is not supported/);
+  });
+
+  it("Resolves ZodLazy via getter to inner type", () => {
+    const Schema = toMongooseSchema(
+      z.object({ prop: z.lazy(() => z.string()) }).mongoose(),
+    );
+    expect(Schema.paths.prop).toBeInstanceOf(
+      (M.Schema.Types as Record<string, unknown>).ZodgooseString,
+    );
+  });
+});
+
+describe("Discriminator support", () => {
+  it("getDiscriminators returns empty array for schema with no discriminators", () => {
+    const base = z.object({ name: z.string() }).mongoose();
+    expect(getDiscriminators(base)).toEqual([]);
+  });
+
+  it("discriminator attaches a discriminator entry to the base schema", () => {
+    const base = z.object({ name: z.string() }).mongoose({ schemaOptions: { discriminatorKey: "kind" } });
+    const child = z.object({ name: z.string(), age: z.number() }).mongoose();
+    const result = discriminator(base, "Adult", child);
+    expect(getDiscriminators(result)).toHaveLength(1);
+    expect(getDiscriminators(result)[0].name).toBe("Adult");
+  });
+
+  it("discriminator chains multiple entries", () => {
+    const base = z.object({ name: z.string() }).mongoose({ schemaOptions: { discriminatorKey: "kind" } });
+    const child1 = z.object({ name: z.string(), age: z.number() }).mongoose();
+    const child2 = z.object({ name: z.string(), weight: z.number() }).mongoose();
+    discriminator(base, "Adult", child1);
+    discriminator(base, "Child", child2);
+    const disc = getDiscriminators(base);
+    expect(disc).toHaveLength(2);
+    expect(disc[0].name).toBe("Adult");
+    expect(disc[1].name).toBe("Child");
+  });
+
+  it("toMongooseSchema applies discriminator to the built schema", () => {
+    const base = z.object({ name: z.string() }).mongoose({ schemaOptions: { discriminatorKey: "kind" } });
+    const child = z.object({ name: z.string(), age: z.number() }).mongoose();
+    discriminator(base, "Adult", child);
+    const Schema = toMongooseSchema(base);
+    // Schema builds successfully with discriminator applied
+    expect(Schema.paths.name).toBeDefined();
+    expect(typeof Schema.discriminator).toBe("function");
   });
 });

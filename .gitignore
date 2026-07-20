@@ -1,5 +1,5 @@
 dist/
-
+.cocoindex_code
 #
 # Nodejs gitignore
 #
@@ -68,3 +68,7 @@ typings/
 cdk.out
 
 .idea
+
+.slim/deepwork/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

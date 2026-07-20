@@ -3,6 +3,7 @@ import type { ZodSchema } from "zod";
 import z from "zod";
 import { zodgooseError } from "./zodgoose-error.js";
 import { MongooseSchemaOptionsSymbol, isZodgoose, type Zodgoose } from "./zodgoose-prototype.js";
+import { applyDiscriminators } from "./zodgoose-discriminator.js";
 import {
   type MongooseSchemaTypeParameters,
   ZodgooseBoolean,
@@ -61,6 +62,7 @@ const addMongooseSchemaFields = (
     monSchemaOptions?: SchemaOptions;
     monTypeOptions?: SchemaTypeOptions<any>;
     typeKey?: string;
+    visitedLazy?: WeakSet<object>;
   },
 ): void => {
   const {
@@ -82,18 +84,32 @@ const addMongooseSchemaFields = (
 
   // Handle ZodPipe (Zod 4.x validators/transformers) by unwrapping early
   while (isZodType(zodSchemaFinal, "ZodPipe")) {
-    const pipeDef = (zodSchemaFinal as any)._zod.def;
-    if (pipeDef.out?.def?.type === "transform") {
+    const pipeDef = zodSchemaFinal._zod.def as unknown as Record<string, unknown>;
+    const pipeOut = pipeDef["out"] as Record<string, unknown> | undefined;
+    if (pipeOut?.["def"] && (pipeOut["def"] as Record<string, unknown>)["type"] === "transform") {
       // Transforms change the type - not supported, but we still break to let the error be caught
       break;
     }
-    if (pipeDef.in) {
-      const { schema: pipeInnerSchema, features: pipeFeatures } = unwrapZodSchema(pipeDef.in as ZodSchema);
+    if (Object.prototype.hasOwnProperty.call(pipeDef, "in")) {
+      const { schema: pipeInnerSchema, features: pipeFeatures } = unwrapZodSchema(pipeDef["in"] as ZodSchema);
       Object.assign(schemaFeatures, pipeFeatures);
       zodSchemaFinal = pipeInnerSchema;
     } else {
       break;
     }
+  }
+  // Handle ZodCodec (Zod 4.x codec types like z.stringbool()) by unwrapping to output type
+  if (isZodType(zodSchemaFinal, "ZodCodec")) {
+    const codecDef = zodSchemaFinal._zod.def as unknown as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(codecDef, "out")) {
+      const { schema: codecOutSchema, features: codecFeatures } = unwrapZodSchema(codecDef["out"] as ZodSchema);
+      Object.assign(schemaFeatures, codecFeatures);
+      zodSchemaFinal = codecOutSchema;
+    }
+  }
+  // Handle standalone ZodTransform (separate class in Zod 4, not wrapped in ZodPipe)
+  if (isZodType(zodSchemaFinal, "ZodTransform")) {
+    throwError("ZodTransform is not supported");
   }
 
   const monMetadata = schemaFeatures.mongoose || {};
@@ -233,8 +249,47 @@ const addMongooseSchemaFields = (
     mongooseFieldDef = ZodgooseDate;
   } else if (isZodType(zodSchemaFinal, "ZodBoolean") || unionSchemaType === "ZodBoolean") {
     mongooseFieldDef = ZodgooseBoolean;
+  } else if (isZodType(zodSchemaFinal, "ZodTemplateLiteral")) {
+    // Template literals produce strings
+    mongooseFieldDef = ZodgooseString;
+  } else if (isZodType(zodSchemaFinal, "ZodNumberFormat")) {
+    // Number format types (z.int(), z.float64(), etc.) are numbers with constraints
+    mongooseFieldDef = ZodgooseNumber;
+  } else if (
+    isZodType(zodSchemaFinal, "ZodEmail") ||
+    isZodType(zodSchemaFinal, "ZodUUID") ||
+    isZodType(zodSchemaFinal, "ZodULID")
+  ) {
+    // String format types (z.email(), z.uuid(), z.ulid(), etc.) are strings
+    mongooseFieldDef = ZodgooseString;
+  } else if (
+    (zodSchemaFinal as object).constructor.name === "ZodStringFormat" ||
+    (zodSchemaFinal as object).constructor.name === "ZodNanoID" ||
+    (zodSchemaFinal as object).constructor.name === "ZodCUID" ||
+    (zodSchemaFinal as object).constructor.name === "ZodCUID2" ||
+    (zodSchemaFinal as object).constructor.name === "ZodXID" ||
+    (zodSchemaFinal as object).constructor.name === "ZodKSUID" ||
+    (zodSchemaFinal as object).constructor.name === "ZodURL" ||
+    (zodSchemaFinal as object).constructor.name === "ZodEmoji" ||
+    (zodSchemaFinal as object).constructor.name === "ZodIPv4" ||
+    (zodSchemaFinal as object).constructor.name === "ZodMAC" ||
+    (zodSchemaFinal as object).constructor.name === "ZodIPv6" ||
+    (zodSchemaFinal as object).constructor.name === "ZodCIDRv4" ||
+    (zodSchemaFinal as object).constructor.name === "ZodCIDRv6" ||
+    (zodSchemaFinal as object).constructor.name === "ZodBase64" ||
+    (zodSchemaFinal as object).constructor.name === "ZodBase64URL" ||
+    (zodSchemaFinal as object).constructor.name === "ZodE164" ||
+    (zodSchemaFinal as object).constructor.name === "ZodJWT" ||
+    (zodSchemaFinal as object).constructor.name === "ZodISODateTime" ||
+    (zodSchemaFinal as object).constructor.name === "ZodISODate" ||
+    (zodSchemaFinal as object).constructor.name === "ZodISOTime" ||
+    (zodSchemaFinal as object).constructor.name === "ZodISODuration" ||
+    (zodSchemaFinal as object).constructor.name === "ZodGUID"
+  ) {
+    // Catch-all for string format subtypes not covered by isZodType
+    mongooseFieldDef = ZodgooseString;
   } else if (isZodType(zodSchemaFinal, "ZodLiteral")) {
-    const literalValue = zodSchemaFinal._zod.def.values?.[0];
+    const literalValue = (zodSchemaFinal as any)._zod.def.values?.[0];
     const literalJsType = typeof literalValue;
     switch (literalJsType) {
       case "boolean": {
@@ -265,7 +320,7 @@ const addMongooseSchemaFields = (
       }
     }
   } else if (isZodType(zodSchemaFinal, "ZodEnum")) {
-    const entries = zodSchemaFinal._zod.def.entries ?? {};
+    const entries = (zodSchemaFinal as any)._zod.def.entries ?? {};
     // Filter out reverse mappings for TypeScript numeric enums
     // e.g., enum E { A = 1 } produces { '1': 'A', A: 1 } - we only want 'A': 1
     const enumKeys = Object.keys(entries).filter((k) => isNaN(Number(k)));
@@ -285,6 +340,9 @@ const addMongooseSchemaFields = (
     }
   } else if (isZodType(zodSchema, "ZodNaN") || isZodType(zodSchema, "ZodNull")) {
     mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodBigInt") || isZodType(zodSchemaFinal, "ZodBigIntFormat")) {
+    const instanceOfClass = zodInstanceofOriginalClasses.get(zodSchemaFinal);
+    mongooseFieldDef = instanceOfClass || ZodgooseNumber;
   } else if (isZodType(zodSchemaFinal, "ZodMap")) {
     mongooseFieldDef = Map;
   } else if (isZodType(zodSchemaFinal, "ZodAny") || isZodType(zodSchemaFinal, "ZodCustom")) {
@@ -297,6 +355,60 @@ const addMongooseSchemaFields = (
     if ((zodSchemaFinal as any)._zod.def.effect?.type !== "refinement") {
       errMsgAddendum = "only refinements are supported";
     }
+  } else if (isZodType(zodSchemaFinal, "ZodSet")) {
+    // ZodSet has no direct Mongoose equivalent; map to Mixed
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodLazy")) {
+    const lazyGetter = (zodSchemaFinal as any)._zod.def.getter as (() => ZodSchema) | undefined;
+    if (lazyGetter) {
+      if (context.visitedLazy?.has(zodSchemaFinal as object)) {
+        mongooseFieldDef = MongooseMixed;
+      } else {
+        const visited = context.visitedLazy ?? new WeakSet<object>();
+        visited.add(zodSchemaFinal as object);
+        const innerSchema = lazyGetter();
+        addMongooseSchemaFields(innerSchema, monSchema, { ...context, visitedLazy: visited });
+        return;
+      }
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodCatch")) {
+    const inner = (zodSchemaFinal as any)._zod.def.innerType ?? (zodSchemaFinal as any)._zod.def.inner ?? (zodSchemaFinal as any).innerType ?? (zodSchemaFinal as any).inner;
+    if (inner) {
+      addMongooseSchemaFields(inner, monSchema, context);
+      return;
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodSuccess")) {
+    const inner = (zodSchemaFinal as any)._zod.def.innerType ?? (zodSchemaFinal as any)._zod.def.inner ?? (zodSchemaFinal as any).innerType ?? (zodSchemaFinal as any).inner;
+    if (inner) {
+      addMongooseSchemaFields(inner, monSchema, context);
+      return;
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodExactOptional")) {
+    const inner = (zodSchemaFinal as any)._zod.def.innerType ?? (zodSchemaFinal as any)._zod.def.inner ?? (zodSchemaFinal as any).innerType ?? (zodSchemaFinal as any).inner;
+    if (inner) {
+      addMongooseSchemaFields(inner, monSchema, context);
+      return;
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodPrefault")) {
+    const inner = (zodSchemaFinal as any)._zod.def.innerType ?? (zodSchemaFinal as any)._zod.def.inner ?? (zodSchemaFinal as any).innerType ?? (zodSchemaFinal as any).inner;
+    if (inner) {
+      addMongooseSchemaFields(inner, monSchema, context);
+      return;
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodNonOptional")) {
+    const inner = (zodSchemaFinal as any)._zod.def.innerType ?? (zodSchemaFinal as any).innerType ?? (zodSchemaFinal as any)._zod.def.inner ?? (zodSchemaFinal as any).inner ?? (zodSchemaFinal as any).unwrap?.();
+    if (inner) {
+      addMongooseSchemaFields(inner, monSchema, context);
+      return;
+    }
+    mongooseFieldDef = MongooseMixed;
+  } else if (isZodType(zodSchemaFinal, "ZodSymbol")) {
+    mongooseFieldDef = MongooseMixed;
   } else if (
     isZodType(zodSchemaFinal, "ZodUnknown") ||
     isZodType(zodSchemaFinal, "ZodRecord") ||
@@ -460,7 +572,7 @@ export const toMongooseSchema = <Schema extends Zodgoose<any, any>>(
     },
   );
 
-  addMongooseSchemaFields(rootAny, schema, { monSchemaOptions: schemaOptions, unknownKeys } as any);
+  addMongooseSchemaFields(rootAny, schema, { monSchemaOptions: schemaOptions, unknownKeys, visitedLazy: new WeakSet() } as any);
 
   addMLVPlugin && schema.plugin(mlvPlugin!.module as Parameters<typeof schema.plugin>[0]);
   addMLDPlugin &&
@@ -469,6 +581,9 @@ export const toMongooseSchema = <Schema extends Zodgoose<any, any>>(
         (mldPlugin!.module as Parameters<typeof schema.plugin>[0]),
     );
   addMLGPlugin && schema.plugin(mlgPlugin!.module as Parameters<typeof schema.plugin>[0]);
+
+  // Apply discriminators after building the base schema
+  applyDiscriminators(rootAny as Zodgoose<any, any>, schema, toMongooseSchema);
 
   return schema;
 };

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import M from "mongoose";
 import type { ZodSchema, ZodTypeAny } from "zod";
 import { z } from "zod";
 import {
@@ -9,6 +8,13 @@ import {
   MongooseTypeOptionsSymbol,
 } from "./zodgoose-prototype.js";
 import { type SchemaFeatures } from "./zodgoose-options.js";
+import {
+  getCustomTypeEntry,
+  getCustomTypeSchemaClass,
+  getCustomTypeInstanceClass,
+  isRegisteredCustomType,
+  listRegisteredCustomTypes,
+} from "./zodgoose-custom-types.js";
 
 export type { SchemaFeatures };
 
@@ -136,9 +142,13 @@ export const unwrapZodSchema = (
     return unwrapZodSchema(schema.unwrap(), options, { ..._features });
   }
 
+  if (isZodType(schema, "ZodReadonly")) {
+    return unwrapZodSchema((schema as any)._zod.def.innerType, options, _features);
+  }
+
   if (isZodType(schema, "ZodArray") && !options.doNotUnwrapArrays) {
     const wrapInArrayTimes = Number(_features.array?.wrapInArrayTimes || 0) + 1;
-    const def = schema._zod.def as any;
+    const def = (schema as any)._zod.def as any;
     const innerType = def.element ?? def.type ?? def.innerType;
     return unwrapZodSchema(innerType, options, {
       ..._features,
@@ -155,16 +165,31 @@ export const unwrapZodSchema = (
 
 export const zodInstanceofOriginalClasses = new WeakMap<ZodTypeAny, new (...args: any[]) => any>();
 
-export const zodgooseCustomType = <T extends keyof typeof M.Types & keyof typeof M.Schema.Types>(
+export const zodgooseCustomType = <T extends string>(
   typeName: T,
   params?: { message?: string },
-): z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>> => {
-  const instanceClass = typeName === "Buffer" ? Buffer : M.Types[typeName];
-  const typeClass = M.Schema.Types[typeName];
+): z.ZodType => {
+  if (!isRegisteredCustomType(typeName)) {
+    throw new Error(
+      `Unsupported custom Mongoose type: "${typeName}". ` +
+        `Supported types: ${listRegisteredCustomTypes().join(", ")}`,
+    );
+  }
 
-  type TFixed = T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T];
+  const entry = getCustomTypeEntry(typeName);
+  const typeClass = getCustomTypeSchemaClass(typeName);
+  const instanceClass = getCustomTypeInstanceClass(typeName);
 
-  const result = z.instanceof(instanceClass, params) as z.ZodType<InstanceType<TFixed>>;
+  let result: z.ZodType;
+  const customSchema = entry.zodSchema;
+  if (customSchema) {
+    result = customSchema;
+  } else if (instanceClass) {
+    result = z.instanceof(instanceClass, params);
+  } else {
+    result = z.any();
+  }
+
   const innerSchema = (result as any)._zod?.def?.schema ?? result;
   zodInstanceofOriginalClasses.set(innerSchema, typeClass);
 

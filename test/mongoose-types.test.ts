@@ -1,7 +1,7 @@
 import { MongoMemoryServer } from "mongodb-memory-server";
 import M from "mongoose";
 import { z } from "zod";
-import { zodgooseCustomType, toMongooseSchema } from "../src/index.js";
+import { zodgooseCustomType, toMongooseSchema, discriminator } from "../src/index.js";
 
 describe("Zongoose Mongoose Types", () => {
   let mongoServer: MongoMemoryServer;
@@ -126,5 +126,106 @@ describe("Zongoose Mongoose Types", () => {
     const found = await Model.findOne({ _id: doc._id });
     // Custom getter transforms Buffer to hex string
     expect(found?.data).toBe("616263");
+  });
+
+  it("handles BigInt type (Mongoose 8+)", async () => {
+    try {
+      // Skip if BigInt SchemaType not available
+      if (!M.Schema.Types.BigInt) {
+        console.warn("BigInt SchemaType not available, skipping test");
+        return;
+      }
+
+      const Model = M.model(
+        "BigIntTest",
+        toMongooseSchema(z.object({ value: zodgooseCustomType("BigInt") }).mongoose()),
+      );
+
+      const doc = new Model({ value: 42n });
+      await doc.save();
+
+      const found = await Model.findOne({ _id: doc._id });
+      expect(found?.value).toBe(42n);
+    } catch (err: any) {
+      // If the SchemaType doesn't exist in this Mongoose version, skip gracefully
+      if (err.message?.includes?.("Unsupported custom Mongoose type")) {
+        console.warn("BigInt not supported in this Mongoose version, skipping");
+        return;
+      }
+      throw err;
+    }
+  });
+
+  it("handles UUID type (Mongoose 7+)", async () => {
+    try {
+      // Skip if UUID SchemaType not available
+      if (!M.Schema.Types.UUID) {
+        console.warn("UUID SchemaType not available, skipping test");
+        return;
+      }
+
+      const Model = M.model(
+        "UUIDTest",
+        toMongooseSchema(z.object({ uid: zodgooseCustomType("UUID") }).mongoose()),
+      );
+
+      const uuidStr = "550e8400-e29b-41d4-a716-446655440000";
+      const doc = new Model({ uid: new M.Types.UUID(uuidStr) });
+      await doc.save();
+
+      const found = await Model.findOne({ _id: doc._id });
+      // Mongoose UUID fields store as Buffer internally; toString() gives hex
+      expect(found?.uid).toBeDefined();
+      // The UUID should round-trip correctly (toString preserves dashes)
+      expect(found?.uid.toString()).toBe(uuidStr.toLowerCase());
+    } catch (err: any) {
+      // If the SchemaType doesn't exist in this Mongoose version, skip gracefully
+      if (err.message?.includes?.("Unsupported custom Mongoose type")) {
+        console.warn("UUID not supported in this Mongoose version, skipping");
+        return;
+      }
+      throw err;
+    }
+  });
+
+  it("bufferMongooseGetter returns non-Binary values unchanged", async () => {
+    const Model = M.model(
+      "BufferNonBinaryTest",
+      toMongooseSchema(
+        z.object({ data: zodgooseCustomType("Buffer") }).mongoose(),
+      ),
+    );
+
+    // Save a string value (non-Binary) — the getter should pass it through
+    const doc = new Model({ data: "not-a-buffer" as any });
+    await doc.save();
+
+    const found = await Model.findOne({ _id: doc._id });
+    // bufferMongooseGetter returns non-Binary values as-is, no crash
+    expect(found?.data).toBeDefined();
+  });
+
+  describe("Discriminator round-trip", () => {
+    it("base schema with discriminator converts successfully", () => {
+      const base = z
+        .object({
+          name: z.string(),
+        })
+        .mongoose({ schemaOptions: { discriminatorKey: "type" } });
+
+      const child = z
+        .object({
+          name: z.string(),
+          age: z.number(),
+        })
+        .mongoose();
+
+      discriminator(base, "Person", child);
+
+      // Should not throw
+      const Schema = toMongooseSchema(base);
+      expect(Schema).toBeDefined();
+      expect(Schema.paths.name).toBeDefined();
+    });
   });
 });

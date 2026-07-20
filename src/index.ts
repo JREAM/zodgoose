@@ -23,3 +23,11 @@ export type {
 export { setup } from "./zodgoose-setup.js";
 export { toMongooseSchema } from "./build-mongoose-schema.js";
 export { zodgooseCustomType } from "./zod-walkers.js";
+export {
+  isRegisteredCustomType,
+  listRegisteredCustomTypes,
+  registerCustomType,
+} from "./zodgoose-custom-types.js";
+export type { CustomTypeEntry } from "./zodgoose-custom-types.js";
+export { discriminator, getDiscriminators } from "./zodgoose-discriminator.js";
+export type { DiscriminatorEntry } from "./zodgoose-discriminator.js";

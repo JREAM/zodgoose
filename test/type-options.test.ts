@@ -411,4 +411,43 @@ describe("Type options", () => {
 
     expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
   });
+
+  it("Throws if both zodgooseValidate and validate are set", () => {
+    const zodSchema = z
+      .object({
+        username: z.string().mongooseTypeOptions({
+          zodgooseValidate: (v: string) => v.length > 3,
+          validate: (v: string) => v.length > 3,
+        } as any),
+      })
+      .mongoose();
+
+    expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
+  });
+
+  it("Throws if both mzValidate and validate are set", () => {
+    const zodSchema = z
+      .object({
+        username: z.string().mongooseTypeOptions({
+          mzValidate: (v: string) => v.length > 3,
+          validate: (v: string) => v.length > 3,
+        } as any),
+      })
+      .mongoose();
+
+    expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
+  });
+
+  it("Throws if both mzRequired and required are set", () => {
+    const zodSchema = z
+      .object({
+        username: z.string().mongooseTypeOptions({
+          mzRequired: true,
+          required: true,
+        } as any),
+      })
+      .mongoose();
+
+    expect(() => toMongooseSchema(zodSchema)).toThrow(zodgooseError);
+  });
 });

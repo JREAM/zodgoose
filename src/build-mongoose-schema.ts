@@ -78,7 +78,24 @@ const addMongooseSchemaFields = (
     throw new zodgooseError(`${noPath ? "" : `Path \`${fieldPath}\`: `}${message}`);
   };
 
-  const { schema: zodSchemaFinal, features: schemaFeatures } = unwrapZodSchema(zodSchema);
+  let { schema: zodSchemaFinal, features: schemaFeatures } = unwrapZodSchema(zodSchema);
+
+  // Handle ZodPipe (Zod 4.x validators/transformers) by unwrapping early
+  while (isZodType(zodSchemaFinal, "ZodPipe")) {
+    const pipeDef = (zodSchemaFinal as any)._zod.def;
+    if (pipeDef.out?.def?.type === "transform") {
+      // Transforms change the type - not supported, but we still break to let the error be caught
+      break;
+    }
+    if (pipeDef.in) {
+      const { schema: pipeInnerSchema, features: pipeFeatures } = unwrapZodSchema(pipeDef.in as ZodSchema);
+      Object.assign(schemaFeatures, pipeFeatures);
+      zodSchemaFinal = pipeInnerSchema;
+    } else {
+      break;
+    }
+  }
+
   const monMetadata = schemaFeatures.mongoose || {};
 
   const {
@@ -276,7 +293,7 @@ const addMongooseSchemaFields = (
     if (instanceOfClass === M.Schema.Types.Buffer && !("get" in commonFieldOptions)) {
       commonFieldOptions.get = bufferMongooseGetter;
     }
-  } else if (isZodType(zodSchemaFinal, "ZodEffects") || isZodType(zodSchemaFinal, "ZodPipe")) {
+  } else if (isZodType(zodSchemaFinal, "ZodEffects")) {
     if ((zodSchemaFinal as any)._zod.def.effect?.type !== "refinement") {
       errMsgAddendum = "only refinements are supported";
     }

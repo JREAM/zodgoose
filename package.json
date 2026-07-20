@@ -1,6 +1,6 @@
 {
   "name": "@jream/zodgoose",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Bridge Zod schemas to Mongoose — single source of truth, full type inference.",
   "keywords": [
     "mongodb",

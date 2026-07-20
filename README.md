@@ -11,7 +11,7 @@ yarn add @jream/zongoose
 bun add @jream/zongoose
 ```
 
-**Peer dependencies:** `mongoose@^7.0.0`, `zod@^3.0.0`
+**Peer dependencies:** `mongoose@>=7.0.0`, `zod@>=4.0.0`
 
 ## Quick Start
 

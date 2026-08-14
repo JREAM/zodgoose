@@ -4,8 +4,10 @@
 
 <div align="center">
 
-[![CI](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml/badge.svg)](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/JREAM/zodgoose/graph/badge.svg)](https://codecov.io/gh/JREAM/zodgoose)
+[![Build](https://img.shields.io/github/actions/workflow/status/JREAM/zodgoose/ci.yml?branch=main&label=build)](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml)
+[![codecov](https://img.shields.io/codecov/c/github/JREAM/zodgoose?color=blue)](https://codecov.io/gh/JREAM/zodgoose)
+[![npm version](https://img.shields.io/npm/v/@jream/zodgoose.svg?color=blue)](https://www.npmjs.com/package/@jream/zodgoose)
+[![Powered by Bun](https://img.shields.io/badge/Powered%20by-Bun-%23000000?logo=bun)](https://bun.sh)
 
 </div>
 

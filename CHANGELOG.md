@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     operations only validate when `runValidators: true` is passed, and even
     then a root refinement sees the pre-update snapshot, not the `$set` values.
   - Failures reject with a `MongooseError.ValidationError`, matching the error
-    type per-path validators already produce. All Zod issues are collapsed onto
-    a single `_root` path whose message joins the Zod messages.
+    type per-path validators already produce. Field-level Zod issues keep their
+    real path; document-level issues land on a synthetic `_root` path.
   - New `skipDocumentValidation` option on `toMongooseSchema()` (and the
     `defaultToMongooseSchemaOptions` setup path) to disable the hook.
 
@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Discriminator child schemas inherit the document-validation opt-out.**
   When `skipDocumentValidation` is set on the base schema, recursively
   converted discriminator children honor it too.
+- **Field-level Zod issues keep their real path.** The document hook now maps
+  each Zod issue to its actual field path (e.g. `err.errors.a`) instead of
+  collapsing every failure onto `_root`. Only document-level issues from root
+  `refine`/`superRefine` land on `_root`, and multiple root issues are joined
+  into that one message.
 
 ### Changed
 

@@ -667,15 +667,31 @@ export const toMongooseSchema = <Schema extends Zodgoose<any, any>>(
       } catch (e) {
         if (e instanceof z.ZodError && e.issues.length > 0) {
           // Convert the Zod issues into a Mongoose ValidationError so save()
-          // and updateOne() with runValidators reject with the same error type
-          // zodgoose's per-path validators already produce. Collapse all issues
-          // into a single `_root` path error, joining the Zod messages.
+          // and insertMany() reject with the same error type zodgoose's
+          // per-path validators already produce. Issues that point at a
+          // specific field keep their real path; document-level issues (from
+          // root .refine()/.superRefine()) land on a synthetic `_root` path.
           const validationError = new M.Error.ValidationError(this as any);
-          const validatorsError = new M.Error.ValidatorError({
-            path: "_root",
-            message: e.issues.map((issue) => issue.message).join("; "),
-          });
-          validationError.addError("_root", validatorsError);
+          for (const issue of e.issues) {
+            const path = issue.path.length === 0 ? "_root" : issue.path.map(String).join(".");
+            const existing = validationError.errors[path];
+            if (existing) {
+              existing.message = `${existing.message}; ${issue.message}`;
+            } else {
+              const validatorsError = new M.Error.ValidatorError({
+                path,
+                message: issue.message,
+              });
+              validationError.addError(path, validatorsError);
+            }
+          }
+          if (Object.keys(validationError.errors).length === 0) {
+            const validatorsError = new M.Error.ValidatorError({
+              path: "_root",
+              message: e.issues.map((issue) => issue.message).join("; "),
+            });
+            validationError.addError("_root", validatorsError);
+          }
           throw validationError;
         }
         throw e;

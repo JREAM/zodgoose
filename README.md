@@ -11,6 +11,27 @@
 
 ---
 
+## What's new in v0.3.0
+
+> See the [full changelog](./CHANGELOG.md) for every change.
+
+**New features**
+
+- **Document-level validation.** Root-level `.refine()` / `.superRefine()` now
+  actually fire, via a `post('validate')` hook that parses the whole document
+  through your schema. Previously only per-path `validate` functions ran, so
+  the Zod root never got a validator.
+  - Applies to `save()`, `create()`, and `insertMany()`.
+  - Rejects with a Mongoose `ValidationError`; field issues keep their real
+    path, root issues land on `_root`.
+  - New `skipDocumentValidation` option to opt out.
+
+**Breaking changes**
+
+- **None.** v0.3.0 is fully backward compatible — it adds enforcement that
+  previously didn't exist and fixes bugs (strict-roots saving, a broken
+  `genTimestampsSchema` shape, Codecov/CI badges).
+
 **Zodgoose** — Create Mongoose Schemas with Zod
 - [Mongoose](https://github.com/Automattic/mongoose) 7.x+
 - [Zod](https://github.com/colinhacks/zod) 4.x+
@@ -219,13 +240,27 @@ Two update caveats (matching vanilla Mongoose and `@nullix/zod-mongoose`):
   right tool for update-time checks.
 
 Error shape: when the document hook fails, save/insertMany/create reject with
-the same `MongooseError.ValidationError` your per-path validators produce. All
-failed Zod issues are collapsed onto a single `_root` path whose message joins
-the Zod messages, so you can inspect `err.errors._root.message`.
+the same `MongooseError.ValidationError` your per-path validators produce.
+Zod issues that name a specific field keep their real path (e.g.
+`err.errors.a`); only document-level issues from `refine`/`superRefine` land on
+a synthetic `_root` path (`err.errors._root.message`). Multiple root issues are
+joined into that single `_root` message.
 
 Strict roots: the hook strips the Mongoose-injected `_id`, `__v`, and `id`
 from the parsed object, so `.strict()` schemas save cleanly. If you explicitly
 declare those keys in your shape, they are preserved and validated instead.
+
+Two Mongoose-mechanics caveats worth knowing:
+
+- **`validateSync()` does not run document-level refinements.** The hook is on
+  `post('validate')`, which Mongoose only fires during async validation
+  (`$validate`/`save`). `validateSync()` runs per-path validators but not the
+  document hook, so a root refine violation is not caught by it.
+- **`insertMany` with `validate: false` still runs validators.** Mongoose calls
+  `doc.$validate()` unconditionally inside `insertMany`, so both per-path and
+  document-level validators run regardless of the flag. This matches vanilla
+  Mongoose, where a `validate: false` option only skips the sync bulk-write
+  pre-check.
 
 Disable the whole document hook with:
 

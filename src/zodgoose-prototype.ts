@@ -68,7 +68,15 @@ export type Zodgoose<
   QueryHelpers extends {} = {},
   TStaticMethods extends {} = {},
   TVirtuals extends {} = {},
-> = ReturnType<typeof createZodgooseBase<ZodType, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>>;
+> = ReturnType<
+  typeof createZodgooseBase<ZodType, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>
+> & {
+  readonly _zod: {
+    input: DocType;
+    output: DocType;
+    def: { type: "zodgoose" };
+  };
+};
 
 export const Zodgoose = {
   create<
@@ -95,6 +103,16 @@ declare module "zod" {
       this: T,
       options: SchemaTypeOptions<T["_output"]>,
     ) => T;
+    /**
+     * Wrap a Zod object schema as a Zodgoose schema, attaching Mongoose schema
+     * and type options. Added to `ZodObject.prototype` at runtime, so this
+     * resolves on object schemas (including the result of `.merge()` /
+     * `.extend()`).
+     */
+    mongoose: <T extends ZodSchema>(
+      this: T,
+      metadata?: MongooseMetadata<T["_output"], {}, {}, {}, {}>,
+    ) => Zodgoose<T, T["_output"], {}, {}, {}, {}>;
   }
 }
 

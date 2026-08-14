@@ -49,6 +49,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collapsing every failure onto `_root`. Only document-level issues from root
   `refine`/`superRefine` land on `_root`, and multiple root issues are joined
   into that one message.
+- **`.mongoose()` is now declared on the Zod schema types (issue #3).** It was
+  only ever attached at runtime, so consumers hit
+  `Property 'mongoose' does not exist on type 'ZodObject<...>'`. The type
+  declaration now matches the runtime prototype, and `z.infer` of a
+  `.mongoose()`-wrapped schema resolves to the underlying field types instead
+  of `unknown`.
+- **`.merge(genTimestampsSchema(...))` no longer corrupts field types.** The
+  computed timestamp keys widened to an index-signature type, so merging
+  produced a bogus `Record<string, ...>` output. The timestamp shape is now
+  keyed by the literal field names, so `z.infer` of a merged schema keeps all
+  fields.
+- **Added `test/type-tests.ts`** — static (tsc-verified) regression tests for
+  the type issues, plus a runtime integration test for the reported
+  `.merge(...).mongoose({ schemaOptions, typeOptions })` flow.
 
 ### Changed
 

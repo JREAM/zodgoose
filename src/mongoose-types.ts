@@ -22,10 +22,22 @@ export const genTimestampsSchema = <CrAt = "createdAt", UpAt = "updatedAt">(
   // them in. Previously this returned an empty `z.object({})`, so the timestamp
   // fields never appeared in the runtime shape, which produced a broken
   // `{ [x: string]: unknown }` type when merged.
+  // Note: the computed keys below would otherwise widen to an index signature
+  // (`Record<string, ...>`), which corrupts the output type when merged into a
+  // user schema. Casting to a keyed record keeps the literal field names.
+  type TimestampKey = NonNullable<CrAt | UpAt> & string;
   const shape = {
-    ...(createdAtField != null ? { [createdAtField]: z.date().optional() } : {}),
-    ...(updatedAtField != null ? { [updatedAtField]: z.date().optional() } : {}),
-  };
+    ...(createdAtField != null
+      ? ({ [createdAtField]: z.date().optional() } as {
+          [K in TimestampKey]?: z.ZodOptional<z.ZodDate>;
+        })
+      : {}),
+    ...(updatedAtField != null
+      ? ({ [updatedAtField]: z.date().optional() } as {
+          [K in TimestampKey]?: z.ZodOptional<z.ZodDate>;
+        })
+      : {}),
+  } as Partial<Record<TimestampKey, z.ZodOptional<z.ZodDate>>>;
 
   const schema = z.object(shape);
   (schema._zod.def as any)[MongooseSchemaOptionsSymbol] = {

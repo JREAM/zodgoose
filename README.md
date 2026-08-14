@@ -335,16 +335,25 @@ Generate real, typed `createdAt` / `updatedAt` date fields that you can merge
 into your object schema. The fields are optional in the schema because Mongoose
 auto-populates them via the `timestamps` schema option.
 
-Prefer `.extend(...shape)` over `.merge()` (which is deprecated in Zod 4.x):
+Both merge styles now keep proper field types, so `z.infer` of the result gives
+the timestamp fields (not a broken index signature):
 
 ```ts
 const userSchema = z
   .object({ name: z.string() })
-  .extend(genTimestampsSchema('createdAt', 'updatedAt').shape)
+  .merge(genTimestampsSchema('createdAt', 'updatedAt')) // or .extend(ts.shape)
   .mongoose();
+type User = z.infer<typeof userSchema>; // { name: string; createdAt?: Date; updatedAt?: Date }
+```
 
-// Or, to also auto-manage timestamps on save, extend the schema object itself:
+Note: `.merge()` and `.extend(...shape)` pick up the fields but **drop** the
+`timestamps` Mongoose option bundled into `genTimestampsSchema`, so Mongoose
+won't auto-fill them unless you pass `timestamps` yourself. To get both the
+typed fields **and** auto-managed timestamps, extend the schema object instead:
+
+```ts
 const withAuto = genTimestampsSchema().extend({ username: z.string() }).mongoose();
+// withAuto is auto-managed on save; createdAt/updatedAt are set by Mongoose.
 ```
 
 Custom names and disabling one side are supported:

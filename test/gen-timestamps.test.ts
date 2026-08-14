@@ -159,4 +159,39 @@ describe("Generate timestamps schema helper", () => {
     const doc2 = await Model.create({ username: "other" });
     expect(doc2.username).toBe("other");
   });
+
+  it("supports the reported .merge(...).mongoose() flow with typeOptions", async () => {
+    // Regression for issue #3: the reported schema used `.merge(genTimestampsSchema(...))`
+    // then `.mongoose({ schemaOptions, typeOptions })`. This must build and save.
+    //
+    // Note: `.merge()` (like `.extend(...shape)`) drops the `timestamps` schema
+    // option bundled into genTimestampsSchema, so pass `timestamps` explicitly
+    // in `schemaOptions` to keep Mongoose auto-managing the fields. To avoid
+    // that, use `genTimestampsSchema().extend({ ... })` instead.
+    const userSchema = z
+      .object({
+        name: z.string().min(1),
+        email: z.email(),
+      })
+      .merge(genTimestampsSchema("createdAt", "updatedAt"))
+      .mongoose({
+        schemaOptions: {
+          collection: "users",
+          timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
+        },
+        typeOptions: {
+          email: { unique: true, index: true },
+          name: { required: true },
+        },
+      });
+
+    const Schema = toMongooseSchema(userSchema);
+    const Model = M.model("Issue3User", Schema);
+
+    const doc = await Model.create({ name: "Alice", email: "alice@example.com" });
+    expect(doc.name).toBe("Alice");
+    expect(doc.email).toBe("alice@example.com");
+    expect(doc.createdAt).toBeInstanceOf(Date);
+    expect(doc.updatedAt).toBeInstanceOf(Date);
+  });
 });

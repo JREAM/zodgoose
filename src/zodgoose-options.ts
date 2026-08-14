@@ -14,6 +14,12 @@ export interface DisableablePlugins {
 export interface ToZodgooseSchemaOptions {
   disablePlugins?: DisableablePlugins | true;
   unknownKeys?: ZodUnknownKeysHandling;
+  /**
+   * Disable the document-level `post('validate')` hook that runs the whole
+   * parsed document through the root schema. This is what makes root-level
+   * `.refine()` / `.superRefine()` effects fire. Enabled by default.
+   */
+  skipDocumentValidation?: boolean;
 }
 
 export interface ZodgooseSetupOptions {

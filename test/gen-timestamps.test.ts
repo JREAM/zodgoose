@@ -116,4 +116,47 @@ describe("Generate timestamps schema helper", () => {
     doc2.username = "mongoose";
     await expect(doc2.save()).toBeTruthy();
   });
+
+  it("populates the runtime shape with real timestamp fields", () => {
+    expect(Object.keys(genTimestampsSchema("createdAt", "updatedAt").shape)).toEqual([
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(Object.keys(genTimestampsSchema("cd", "ud").shape)).toEqual(["cd", "ud"]);
+    expect(Object.keys(genTimestampsSchema("createdAt", null).shape)).toEqual(["createdAt"]);
+  });
+
+  it("genTimestampsSchema().extend({...}) adds fields and auto-manages them", async () => {
+    // The canonical merge: extend the returned schema object so the mongoose
+    // `timestamps` schema option metadata survives, and the real date fields
+    // are present in the resulting shape.
+    const User = genTimestampsSchema().extend({ username: z.string() }).mongoose();
+    const Model = M.model("TimestampsUser", toMongooseSchema(User));
+
+    const doc = await Model.create({ username: "mongo" });
+
+    expect(doc.username).toBe("mongo");
+    expect(doc.createdAt).toBeInstanceOf(Date);
+    expect(doc.updatedAt).toBeInstanceOf(Date);
+    expect((Model as any).schema.paths.createdAt).toBeDefined();
+    expect((Model as any).schema.paths.updatedAt).toBeDefined();
+  });
+
+  it("extend(genTimestampsSchema().shape) yields typed, optional fields", async () => {
+    // Regression for the reported broken `{ [x: string]: unknown }` shape:
+    // the timestamp fields must be real, optional z.date() fields so they can
+    // be merged and produce a usable type (not an index-signature fallback).
+    const Timestamps = genTimestampsSchema("createdAt", "updatedAt");
+    const User = z.object({ username: z.string() }).extend(Timestamps.shape).mongoose();
+    const Model = M.model("TimestampsShapeUser", toMongooseSchema(User));
+
+    const doc = await Model.create({ username: "mongo" });
+    expect(doc.username).toBe("mongo");
+    expect((Model as any).schema.paths.createdAt).toBeDefined();
+    expect((Model as any).schema.paths.updatedAt).toBeDefined();
+
+    // Optional: a doc with no explicit timestamps validates and saves.
+    const doc2 = await Model.create({ username: "other" });
+    expect(doc2.username).toBe("other");
+  });
 });

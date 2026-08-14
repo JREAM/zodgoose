@@ -90,12 +90,13 @@ export function applyDiscriminators(
   schema: Schema,
   // eslint-disable-next-line @typescript-eslint/ban-types
   toMongooseSchemaFn: Function,
+  options: Record<string, unknown> = {},
 ): void {
   const discriminators = getDiscriminators(rootZodSchema);
   for (const disc of discriminators) {
     const childMonSchema = toMongooseSchemaFn(
       disc.schema,
-      {},
+      options,
     ) as Schema;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

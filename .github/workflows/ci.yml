@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -30,6 +29,14 @@ jobs:
 
       - run: bun run lint
 
-      - run: bun test --coverage
+      - name: Run Tests & Generate Coverage
+        run: bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
 
       - run: bun run build

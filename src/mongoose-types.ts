@@ -8,15 +8,26 @@ type StringLiteral<T> = T extends string ? (string extends T ? never : T) : neve
 export const genTimestampsSchema = <CrAt = "createdAt", UpAt = "updatedAt">(
   createdAtField: StringLiteral<CrAt | "createdAt"> | null = "createdAt",
   updatedAtField: StringLiteral<UpAt | "updatedAt"> | null = "updatedAt",
-): z.ZodObject<any> => {
+) => {
   if (createdAtField != null && updatedAtField != null && createdAtField === updatedAtField) {
     throw new zodgooseError("`createdAt` and `updatedAt` fields must be different");
   }
 
-  const schema = z.object({
-  } as {
-    [_ in StringLiteral<NonNullable<CrAt | UpAt>>]: z.ZodDate;
-  });
+  // Build real `z.date()` fields so the returned schema can be merged into a
+  // user's object schema via `.extend(genTimestampsSchema().shape)` (or use
+  // `genTimestampsSchema().extend({ ... })` to also keep the mongoose
+  // `timestamps` auto-management). The fields are optional because Mongoose
+  // auto-populates them on save via the `timestamps` option below; requiring
+  // them would reject brand-new documents before Mongoose has a chance to fill
+  // them in. Previously this returned an empty `z.object({})`, so the timestamp
+  // fields never appeared in the runtime shape, which produced a broken
+  // `{ [x: string]: unknown }` type when merged.
+  const shape = {
+    ...(createdAtField != null ? { [createdAtField]: z.date().optional() } : {}),
+    ...(updatedAtField != null ? { [updatedAtField]: z.date().optional() } : {}),
+  };
+
+  const schema = z.object(shape);
   (schema._zod.def as any)[MongooseSchemaOptionsSymbol] = {
     ...(schema._zod.def as any)[MongooseSchemaOptionsSymbol],
     timestamps: {

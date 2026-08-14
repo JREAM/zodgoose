@@ -2,6 +2,13 @@
   <img src="https://raw.githubusercontent.com/JREAM/zodgoose/refs/heads/main/assets/zodgoose.webp" alt="zodgoose" width="700">
 </div>
 
+<div align="center">
+
+[![CI](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml/badge.svg)](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/JREAM/zodgoose/graph/badge.svg)](https://codecov.io/gh/JREAM/zodgoose)
+
+</div>
+
 ---
 
 **Zodgoose** — Create Mongoose Schemas with Zod
@@ -52,7 +59,7 @@ const userSchema = z.object({
   avatar: zodgooseCustomType('Buffer').optional(),
   owner: zodgooseCustomType('ObjectId'),
 })
-  .merge(genTimestampsSchema('createdAt', 'updatedAt'))
+  .extend(genTimestampsSchema('createdAt', 'updatedAt').shape)
   .mongoose({
     schemaOptions: { collection: 'users' },
     typeOptions: {
@@ -109,7 +116,7 @@ z.object({
 
 // Timestamps
 z.object({ name: z.string() })
-  .merge(genTimestampsSchema('createdAt', 'updatedAt'))
+  .extend(genTimestampsSchema('createdAt', 'updatedAt').shape)
   .mongoose();
 ```
 
@@ -171,6 +178,61 @@ Zodgoose removes problematic Mongoose defaults:
 | Number/string casting | Enabled | Disabled |
 | Extraneous fields | Silent strip | Throws error |
 
+## Document-Level Validation
+
+By default zodgoose registers a `post('validate')` hook that parses the whole
+document through your root schema. This is what makes **root-level**
+`.refine()` / `.superRefine()` work:
+
+```ts
+const userSchema = z
+  .object({
+    startDate: z.date(),
+    endDate: z.date(),
+  })
+  .refine((doc) => doc.endDate >= doc.startDate, {
+    message: 'endDate must come after or equal startDate',
+  })
+  .mongoose();
+
+const User = M.model('User', toMongooseSchema(userSchema));
+await new User({ startDate, endDate: startDate - 1 }).save(); // throws
+```
+
+What runs where:
+
+| Operation | Per-path validators | Root `.refine()`/`.superRefine()` |
+|-----------|--------------------|-------------------------------------|
+| `new Model().save()` | ✅ | ✅ |
+| `Model.create()` | ✅ | ✅ |
+| `insertMany()` | ✅ | ✅ |
+| `findByIdAndUpdate` / `updateOne` / `updateMany` / `bulkWrite` (no `runValidators`) | ❌ | ❌ |
+| same update ops **with** `runValidators: true` | ✅ | ⚠️ see below |
+
+Two update caveats (matching vanilla Mongoose and `@nullix/zod-mongoose`):
+
+- Update operations don't validate unless you pass `runValidators: true`.
+- Even with `runValidators: true`, a **root refinement can't reliably see the
+  new `$set` values**. Mongoose runs the document hook against a
+  reconstructed document that doesn't yet contain the update, so the refined
+  fields may reflect the pre-update snapshot. Per-path validators are the
+  right tool for update-time checks.
+
+Error shape: when the document hook fails, save/insertMany/create reject with
+the same `MongooseError.ValidationError` your per-path validators produce. All
+failed Zod issues are collapsed onto a single `_root` path whose message joins
+the Zod messages, so you can inspect `err.errors._root.message`.
+
+Strict roots: the hook strips the Mongoose-injected `_id`, `__v`, and `id`
+from the parsed object, so `.strict()` schemas save cleanly. If you explicitly
+declare those keys in your shape, they are preserved and validated instead.
+
+Disable the whole document hook with:
+
+```ts
+toMongooseSchema(schema, { skipDocumentValidation: true });
+```
+
 ## Plugin Support
 
 If installed, these plugins auto-enable on every schema:
@@ -206,6 +268,7 @@ Converts a Zod schema to Mongoose schema.
 const schema = toMongooseSchema(userZodSchema, {
   unknownKeys: 'strip', // 'throw' | 'strip' | 'strip-unless-overridden'
   disablePlugins: { leanVirtuals: true },
+  skipDocumentValidation: false, // set true to disable root .refine()/.superRefine()
 });
 ```
 
@@ -233,12 +296,27 @@ z.object({
 
 ### `genTimestampsSchema(createdAt, updatedAt)`
 
-Generate timestamp fields.
+Generate real, typed `createdAt` / `updatedAt` date fields that you can merge
+into your object schema. The fields are optional in the schema because Mongoose
+auto-populates them via the `timestamps` schema option.
+
+Prefer `.extend(...shape)` over `.merge()` (which is deprecated in Zod 4.x):
 
 ```ts
-z.object({ name: z.string() })
-  .merge(genTimestampsSchema('createdAt', 'updatedAt'))
+const userSchema = z
+  .object({ name: z.string() })
+  .extend(genTimestampsSchema('createdAt', 'updatedAt').shape)
   .mongoose();
+
+// Or, to also auto-manage timestamps on save, extend the schema object itself:
+const withAuto = genTimestampsSchema().extend({ username: z.string() }).mongoose();
+```
+
+Custom names and disabling one side are supported:
+
+```ts
+genTimestampsSchema('cd', 'ud');           // custom field names
+genTimestampsSchema('createdAt', null);     // only createdAt (updatedAt disabled)
 ```
 
 ### `zgValidate` / `zgRequired`
@@ -338,7 +416,7 @@ Zodgoose supports all Zod 4.x types:
 | `z.readonly()` | Inner type | Unwraps |
 | `z.lazy(() => ...)` | Inner type | Cycle-safe |
 | `z.pipe(a, b)` | Inner type | Unwraps through pipe |
-| `z.transform(...)` | Error | Not supported |
+| `z.transform(...)` | Error | Throws at schema build: "ZodPipe type is not supported". Zod can't assign a stable Mongoose type to a value whose runtime type changes, so this is a hard, up-front error instead of silent mis-validation. |
 | `z.object({...}).mongoose()` | Schema | With `.mongoose()` metadata |
 
 ## License

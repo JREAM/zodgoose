@@ -29,6 +29,33 @@ import {
 
 const { Mixed: MongooseMixed } = M.Schema.Types;
 
+// Recursively convert MongoDB Binary values (which `doc.toObject()` returns for
+// Buffer fields) back into Node.js Buffers so they match `z.instanceof(Buffer)`.
+// Only touches values that are actually Binary, leaving everything else intact.
+const binaryToBuffer = (value: unknown): unknown => {
+  if (value instanceof M.mongo.Binary) {
+    return Buffer.from(value.buffer);
+  }
+  if (Array.isArray(value)) {
+    return value.map(binaryToBuffer);
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    let copy: Record<string, unknown> | null = null;
+    for (const [k, v] of Object.entries(record)) {
+      const converted = binaryToBuffer(v);
+      if (converted !== v) {
+        if (copy === null) {
+          copy = { ...record };
+        }
+        copy[k] = converted;
+      }
+    }
+    return copy === null ? value : copy;
+  }
+  return value;
+};
+
 registerCustomMongooseZodTypes();
 
 const mlvPlugin = tryImportModule("mongoose-lean-virtuals", import.meta);
@@ -539,7 +566,7 @@ export const toMongooseSchema = <Schema extends Zodgoose<any, any>>(
     },
   };
 
-  const { disablePlugins: dp, unknownKeys } = optionsFinal;
+  const { disablePlugins: dp, skipDocumentValidation, unknownKeys } = optionsFinal;
 
   const rootAny = rootZodSchema as any;
   const metadata = rootAny._zod.def;
@@ -595,8 +622,66 @@ export const toMongooseSchema = <Schema extends Zodgoose<any, any>>(
     );
   addMLGPlugin && schema.plugin(mlgPlugin!.module as Parameters<typeof schema.plugin>[0]);
 
-  // Apply discriminators after building the base schema
-  applyDiscriminators(rootAny as Zodgoose<any, any>, schema, toMongooseSchema);
+  // Apply discriminators after building the base schema. Each child schema is
+  // converted recursively, so it does need to inherit the document-validation
+  // opt-out to avoid re-enabling it for child schemas when the caller disabled
+  // it on the base schema.
+  applyDiscriminators(
+    rootAny as Zodgoose<any, any>,
+    schema,
+    toMongooseSchema,
+    { skipDocumentValidation },
+  );
+
+  // Document-level validation: parse the whole document through the root schema
+  // inside Mongoose's `post('validate')`. This is what makes root-level Zod
+  // `.refine()` / `.superRefine()` effects actually fire (per-path validators
+  // alone never run them, so the Zod root never gets a validator otherwise).
+  //
+  // The current Zod version guards against runs that would double-fire the
+  // same checks, so this is safe on top of the per-path validators.
+  //
+  // Updates: `post('validate')` only runs when Mongoose validates, so update
+  // operations require `runValidators: true` (matching vanilla Mongoose and
+  // the behavior of @nullix/zod-mongoose). Inside the hook `this` is the
+  // document being created or updated, so refinements that rely on `this`
+  // still work. This contrasts with document-less path validators where
+  // `this` is undefined during updates.
+  if (!skipDocumentValidation) {
+    // Mongoose injects `_id`, `__v`, and the `id` virtual into toObject().
+    // A `.strict()` root schema rejects them as unknown keys, so strip the
+    // internal keys that the user did not explicitly declare in their shape.
+    const rootShape = metadata.innerType._zod?.def?.shape as Record<string, unknown> | undefined;
+    const declaredKeys = new Set(rootShape ? Object.keys(rootShape) : []);
+    const internalKeys = ["_id", "__v", "id"].filter((key) => !declaredKeys.has(key));
+
+    schema.post("validate", function () {
+      const obj = this.toObject() as Record<string, unknown>;
+      if (internalKeys.length > 0) {
+        for (const key of internalKeys) {
+          delete obj[key];
+        }
+      }
+      try {
+        metadata.innerType.parse(binaryToBuffer(obj));
+      } catch (e) {
+        if (e instanceof z.ZodError && e.issues.length > 0) {
+          // Convert the Zod issues into a Mongoose ValidationError so save()
+          // and updateOne() with runValidators reject with the same error type
+          // zodgoose's per-path validators already produce. Collapse all issues
+          // into a single `_root` path error, joining the Zod messages.
+          const validationError = new M.Error.ValidationError(this as any);
+          const validatorsError = new M.Error.ValidatorError({
+            path: "_root",
+            message: e.issues.map((issue) => issue.message).join("; "),
+          });
+          validationError.addError("_root", validatorsError);
+          throw validationError;
+        }
+        throw e;
+      }
+    });
+  }
 
   return schema;
 };

@@ -49,8 +49,13 @@ jobs:
       # Analyzes commits since the last tag, bumps the version in package.json,
       # rewrites CHANGELOG.md, creates a vX.Y.Z tag + GitHub Release, commits
       # the file changes back to main, and publishes to npm.
+      #
+      # GITHUB_TOKEN is overridden with RELEASE_GITHUB_TOKEN (a PAT with repo +
+      # workflow scopes) because @semantic-release/git pushes directly to the
+      # protected main branch, which the Actions-issued GITHUB_TOKEN cannot
+      # bypass. An admin-owned PAT can.
       - name: Semantic Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bunx semantic-release

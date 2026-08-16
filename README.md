@@ -5,6 +5,7 @@
 <div align="center">
 
 [![Build](https://img.shields.io/github/actions/workflow/status/JREAM/zodgoose/ci.yml?branch=main&label=build&color=237a34)](https://github.com/JREAM/zodgoose/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/actions/workflow/status/JREAM/zodgoose/release.yml?branch=main&label=release&color=000000)](https://github.com/JREAM/zodgoose/actions/workflows/release.yml)
 [![codecov](https://img.shields.io/codecov/c/github/JREAM/zodgoose?color=blue)](https://codecov.io/gh/JREAM/zodgoose)
 [![npm version](https://img.shields.io/npm/v/@jream/zodgoose.svg?color=000000)](https://www.npmjs.com/package/@jream/zodgoose)
 [![Built with Bun](https://img.shields.io/badge/Built%20with-Bun-%23000000?logo=bun)](https://bun.sh)

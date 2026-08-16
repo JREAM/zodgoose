@@ -1,0 +1,56 @@
+name: Publish to npm
+
+# Release only happens on pushes to main. The CI workflow (ci.yml) covers
+# tests, lint, and coverage for every branch and every pull request.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # semantic-release needs full history to calculate versions.
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # The project requires a Bun canary: it uses `node:v8` snapshot APIs
+          # (via mongodb-memory-server) that stable 1.3.x doesn't implement, and
+          # the committed bun.lock is written by canary 1.4.x.
+          bun-version: canary
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - run: bun install --frozen-lockfile
+
+      - name: Run Tests
+        run: bun test
+
+      - name: Run Build
+        run: bun run build
+
+      # Analyzes commits since the last tag, bumps the version in package.json,
+      # rewrites CHANGELOG.md, creates a vX.Y.Z tag + GitHub Release, commits
+      # the file changes back to main, and publishes to npm.
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bunx semantic-release

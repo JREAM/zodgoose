@@ -472,6 +472,10 @@ MIT License - see [LICENSE.md](./LICENSE.md)
 
 ---
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) — thanks for being part of the project!
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://static.jream.com/logo.svg">
   <img alt="JREAM" src="https://static.jream.com/logo-black.svg" height="40" align="center">
